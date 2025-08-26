@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Cashier POS - كاشير</title>
+  <style>
+    :root{
+      --bg:#0f172a;
+      --card:#111827;
+      --muted:#6b7280;
+      --text:#e5e7eb;
+      --primary:#22c55e;
+      --danger:#ef4444;
+      --warn:#f59e0b;
+      --border:#1f2937;
+      --accent:#38bdf8;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;background:linear-gradient(180deg,#0b1223,#0f172a);
+      color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,"Noto Sans Arabic",Tahoma,Arial,sans-serif;
+    }
+    a{color:inherit;text-decoration:none}
+    button{cursor:pointer}
+    .app{
+      height:100dvh;display:grid;grid-template-rows:56px 1fr;
+    }
+    header{
+      display:flex;align-items:center;justify-content:space-between;
+      padding:0 12px;border-bottom:1px solid var(--border);background:#0b1220;
+      gap:8px
+    }
+    .brand{display:flex;align-items:center;gap:10px}
+    .logo{
+      width:34px;height:34px;border-radius:8px;display:grid;place-items:center;
+      background:linear-gradient(145deg,#18233c,#0f1a33);border:1px solid #22304f;
+      box-shadow:0 2px 8px rgba(0,0,0,.35), inset 0 0 8px rgba(56,189,248,.08);
+    }
+    .logo svg{width:22px;height:22px;fill:#93c5fd}
+    .brand h1{font-size:16px;margin:0}
+    .top-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .btn{
+      background:#152035;color:var(--text);border:1px solid #223047;
+      padding:8px 12px;border-radius:10px;font-weight:600;transition:.15s;display:inline-flex;gap:8px;align-items:center
+    }
+    .btn:hover{filter:brightness(1.05)}
+    .btn.primary{background:linear-gradient(180deg,#16a34a,#22c55e);border:none;color:#07210f}
+    .btn.warn{background:#3b2b0a;border:1px solid #5b430e;color:#fbbf24}
+    .btn.danger{background:#3b0a0a;border:1px solid #6b1111;color:#fecaca}
+    .search{
+      flex:1;min-width:160px;display:flex;align-items:center;background:#121a2d;border:1px solid #223047;border-radius:10px;padding:6px 10px
+    }
+    .search input{
+      width:100%;background:transparent;border:none;outline:none;color:var(--text);font-size:14px
+    }
+
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div class="brand">
+        <div class="logo" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M4 6h16a2 2 0 0 1 2 2v3H2V8a2 2 0 0 1 2-2zm-2 7h20v3a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-3zm6 2a1 1 0 1 0 0 2h8a1 1 0 1 0 0-2H8z"/></svg>
+        </div>
+        <h1>كاشير - Cashier POS</h1>
+      </div>
+      <div class="search">
+        <input id="globalSearch" placeholder="ابحث عن منتج أو امسح الباركود (Enter)..." />
+      </div>
+      <div class="top-actions">
+        <button class="btn" id="btnExport">تصدير نسخ احتياطي</button>
+        <input id="backupFile" type="file" accept=".json" class="hidden" />
+        <button class="btn" id="btnImport">استيراد</button>
+        <button class="btn warn" id="btnReset">تهيئة البيانات</button>
+      </div>
+    </header>
+    <div class="layout">
+      <nav>
+        <ul class="nav-list">
+          <li><a href="#pos" class="nav-link active">نقطة البيع POS</a></li>
+          <li><a href="#products" class="nav-link">المنتجات</a></li>
+          <li><a href="#stock" class="nav-link">المخزون</a></li>
+          <li><a href="#purchases" class="nav-link">المشتريات</a></li>
+          <li><a href="#customers" class="nav-link">العملاء</a></li>
+          <li><a href="#suppliers" class="nav-link">الموردون</a></li>
+          <li><a href="#invoices" class="nav-link">الفواتير</a></li>
+          <li><a href="#reports" class="nav-link">التقارير</a></li>
+          <li><a href="#settings" class="nav-link">الإعدادات</a></li>
+        </ul>
+      </nav>
+      <main class="content" id="view">
+        <!-- Views injected by JS -->
+      </main>
+    </div>
+  </div>
+
+  <template id="tpl-pos">
+    <div class="pos">
+      <div class="toolbar">
+        <div class="field" style="flex:2">
+          <label>اختر عميل</label>
+          <select id="posCustomer"></select>
+        </div>
+        <div class="field" style="flex:1">
+          <label>طريقة الدفع</label>
+          <select id="posPayMethod">
+            <option value="cash">نقد</option>
+            <option value="card">بطاقة</option>
+            <option value="credit">آجل</option>
+          </select>
+        </div>
+        <div class="spacer"></div>
+        <button class="btn primary" id="btnCheckout">إتمام البيع</button>
+      </div>
+      <div class="pos-cols">
+        <div class="catalog">
+          <div class="toolbar">
+            <input id="posSearch" placeholder="بحث عن منتج أو امسح الباركود" />
+            <select id="posCategory" style="max-width:220px"></select>
+            <div class="spacer"></div>
+            <span class="muted">اضغط على المنتج لإضافته للسلة</span>
+          </div>
+          <div class="product-grid" id="posCatalog"></div>
+        </div>
+        <div class="cart">
+          <div class="flex">
+            <strong>السلة</strong>
+            <div class="spacer"></div>
+            <button class="btn danger" id="btnClearCart">تفريغ</button>
+          </div>
+          <div class="cart-items" id="cartItems"></div>
+          <div class="totals">
+            <div class="row"><span>الإجمالي</span><strong id="tSubtotal">0.00</strong></div>
+            <div class="row"><span>خصم (%)</span><input id="tDiscount" type="number" min="0" max="100" value="0"/></div>
+            <div class="row"><span>ضريبة (%)</span><input id="tTax" type="number" min="0" max="100" value="0"/></div>
+            <div class="row"><span>الصافي</span><strong id="tTotal">0.00</strong></div>
+          </div>
+          <div class="flex">
+            <button class="btn" id="btnPrint">طباعة إيصال</button>
+            <div class="spacer"></div>
+            <span id="stockAlert" class="badge warn hidden">تنبيه مخزون منخفض</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <template id="tpl-products">
+    <div class="cards">
+      <div class="card h6">
+        <h2>المنتجات</h2>
+        <div class="toolbar">
+          <input id="pSearch" placeholder="بحث..." />
+          <select id="pCatFilter"></select>
+          <div class="spacer"></div>
+          <button class="btn" id="btnSampleData">ملء بيانات تجريبية</button>
+          <button class="btn primary" id="btnNewProduct">منتج جديد</button>
+        </div>
+        <div style="overflow:auto">
+          <table>
+            <thead>
+              <tr>
+                <th>الباركود</th><th>اسم المنتج</th><th>تصنيف</th><th>سعر البيع</th><th>المخزون</th><th>حد إعادة الطلب</th><th></th>
+              </tr>
+            </thead>
+            <tbody id="pTable"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card h6">
+        <h2>التصنيفات</h2>
+        <div class="toolbar">
+          <input id="catName" placeholder="اسم التصنيف" />
+          <button class="btn" id="btnAddCat">إضافة</button>
+        </div>
+        <div id="catList"></div>
+      </div>
+    </div>
+  </template>
+
+  <template id="tpl-stock">
+    <div class="cards">
+      <div class="card h6">
+        <h2>حركات المخزون</h2>
+        <div class="toolbar">
+          <select id="mType">
+            <option value="">الكل</option>
+            <option value="in">دخول</option>
+            <option value="out">خروج</option>
+            <option value="adjust">تسوية</option>
+            <option value="purchase">شراء</option>
+            <option value="sale">بيع</option>
+            <option value="return">مرتجع</option>
+          </select>
+          <div class="spacer"></div>
+          <button class="btn" id="btnAdjust">تسوية مخزون</button>
+        </div>
+        <div style="overflow:auto">
+          <table>
+            <thead><tr><th>التاريخ</th><th>المنتج</th><th>نوع</th><th>كمية</th><th>ملاحظة</th></tr></thead>
+            <tbody id="mTable"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card h6">
+        <h2>تنبيهات المخزون</h2>
+        <div id="lowStock"></div>
+      </div>
+    </div>
+  </template>
+
+  <template id="tpl-purchases">
+    <div class="cards">
+      <div class="card h6">
+        <h2>إنشاء فاتورة شراء</h2>
+        <div class="grid two">
+          <div class="field">
+            <label>المورد</label>
+            <select id="purSupplier"></select>
+          </div>
+          <div class="field">
+            <label>ملاحظة</label>
+            <input id="purNote" placeholder="اختياري">
+          </div>
+        </div>
+        <div class="toolbar">
+          <input id="purSearch" placeholder="بحث عن منتج لإضافته" />
+          <div class="spacer"></div>
+          <button class="btn primary" id="btnCommitPurchase">إدخال المخزون</button>
+        </div>
+        <div class="cart-items" id="purItems"></div>
+      </div>
+      <div class="card h6">
+        <h2>سجل المشتريات</h2>
+        <div style="overflow:auto">
+          <table>
+            <thead><tr><th>#</th><th>التاريخ</th><th>المورد</th><th>الإجمالي</th></tr></thead>
+            <tbody id="purTable"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <template id="tpl-people">
+    <div class="cards">
+      <div class="card h6">
+        <h2 id="peTitle">العملاء</h2>
+        <div class="toolbar">
+          <input id="peName" placeholder="الاسم" />
+          <input id="pePhone" placeholder="الهاتف" />
+          <button class="btn" id="btnAddPe">إضافة</button>
+        </div>
+        <div style="overflow:auto">
+          <table>
+            <thead><tr><th>الاسم</th><th>الهاتف</th><th>الرصيد</th><th></th></tr></thead>
+            <tbody id="peTable"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card h6">
+        <h2>ملاحظات</h2>
+        <p class="muted">الرصيد يتحرك مع مبيعات الآجل والمدفوعات. هذا النموذج الأولي يحدّث الأرصدة أساسيًا فقط.</p>
+      </div>
+    </div>
+  </template>
+
+  <template id="tpl-invoices">
+    <div class="cards">
+      <div class="card h6">
+        <h2>الفواتير</h2>
+        <div style="overflow:auto">
+          <table>
+            <thead><tr><th>#</th><th>النوع</th><th>التاريخ</th><th>العميل/المورد</th><th>الإجمالي</th><th></th></tr></thead>
+            <tbody id="invTable"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card h6">
+        <h2>معاينة/طباعة</h2>
+        <div id="invPreview" class="empty">اختر فاتورة لعرضها</div>
+      </div>
+    </div>
+  </template>
+
+  <template id="tpl-reports">
+    <div class="cards">
+      <div class="card h6">
+        <h2>ملخص اليوم</h2>
+        <div class="grid three">
+          <div class="pitem">
+            <div>مبيعات اليوم</div>
+            <div id="rSales" class="ok-text" style="font-size:22px;font-weight:800">0.00</div>
+          </div>
+          <div class="pitem">
+            <div>الربح التقريبي</div>
+            <div id="rProfit" class="ok-text" style="font-size:22px;font-weight:800">0.00</div>
+          </div>
+          <div class="pitem">
+            <div>عدد الفواتير</div>
+            <div id="rCount" class="ok-text" style="font-size:22px;font-weight:800">0</div>
+          </div>
+        </div>
+      </div>
+      <div class="card h6">
+        <h2>أفضل المنتجات</h2>
+        <div style="overflow:auto">
+          <table>
+            <thead><tr><th>المنتج</th><th>الكمية</th><th>الإيراد</th></tr></thead>
+            <tbody id="rTop"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <template id="tpl-settings">
+    <div class="cards">
+      <div class="card h6">
+        <h2>الإعدادات العامة</h2>
+        <div class="grid two">
+          <div class="field"><label>اسم المتجر</label><input id="setStoreName" placeholder="مثال: متجر الربيع"></div>
+          <div class="field"><label>الضريبة الافتراضية (%)</label><input id="setTax" type="number" min="0" max="100" value="0"></div>
+          <div class="field"><label>خصم افتراضي (%)</label><input id="setDisc" type="number" min="0" max="100" value="0"></div>
+          <div class="field"><label>عملة العرض</label><input id="setCurrency" placeholder="SAR, MAD, USD..."></div>
+        </div>
+        <div class="toolbar">
+          <button class="btn primary" id="btnSaveSettings">حفظ</button>
+        </div>
+      </div>
+      <div class="card h6">
+        <h2>حول</h2>
+        <p class="muted">هذا نموذج أولي يعمل على المتصفح فقط. يمكنك وصله بواجهة خلفية لاحقًا. يحفظ البيانات في LocalStorage.</p>
+      </div>
+    </div>
+  </template>
+
+  <template id="tpl-receipt">
+    <div class="receipt" id="receipt">
+      <div style="text-align:center">
+        <div style="font-weight:800" id="rcStore">متجري</div>
+        <div class="muted" id="rcDate">—</div>
+        <hr />
+      </div>
+      <div id="rcLines"></div>
+      <hr />
+      <div class="flex" style="justify-content:space-between"><div>الإجمالي</div><div id="rcSubtotal">0.00</div></div>
+      <div class="flex" style="justify-content:space-between"><div>خصم</div><div id="rcDiscount">0.00</div></div>
+      <div class="flex" style="justify-content:space-between"><div>ضريبة</div><div id="rcTax">0.00</div></div>
+      <div class="flex" style="justify-content:space-between;font-weight:800"><div>الصافي</div><div id="rcTotal">0.00</div></div>
+      <hr />
+      <div style="text-align:center">شكرًا لتسوقكم!</div>
+    </div>
+  </template>
+
+  <script>
+    // Simple persistent store using localStorage
+    const DBKEY = 'cashier.pos.v1';
+    const nowIso = () => new Date().toISOString();
+    const fmt = (n) => (Math.round(Number(n) * 100) / 100).toFixed(2);
+    const uid = () => Math.random().toString(36).slice(2,10);
+    const todayStr = () => new Date().toISOString().slice(0,10);
+
+    const emptyDB = {
+      settings:{storeName:"متجري", tax:0, disc:0, currency:""},
+      categories:[{id:"c-all",name:"الكل"}],
+      products:[],
+      stockMoves:[], // {id, productId, type, qty, note, date}
+      customers:[{id:"walkin",name:"عميل نقدي",phone:"",balance:0}],
+      suppliers:[],
+      sales:[], // {id,date,customerId,items[],subtotal,discount,tax,total,payMethod}
+      purchases:[], // {id,date,supplierId,items[],total,note}
+      invoices:[] // {id,type,refId,date,party,total,number}
+    };
+
+    let db = loadDB();
+
+    function loadDB(){
+      try{
+        const raw = localStorage.getItem(DBKEY);
+        if(!raw) return JSON.parse(JSON.stringify(emptyDB));
+        const parsed = JSON.parse(raw);
+        // shallow migrations
+        return Object.assign(JSON.parse(JSON.stringify(emptyDB)), parsed);
+      }catch(e){
+        console.error(e);
+        return JSON.parse(JSON.stringify(emptyDB));
+      }
+    }
+    function saveDB(){ localStorage.setItem(DBKEY, JSON.stringify(db)); }
+
+    // Routing
+    const viewEl = document.getElementById('view');
+    const links = [...document.querySelectorAll('.nav-link')];
+    function renderRoute(){
+      links.forEach(a=>a.classList.toggle('active', location.hash === a.getAttribute('href')));
+      const hash = location.hash || '#pos';
+      const tplId = {
+        '#pos':'tpl-pos',
+        '#products':'tpl-products',
+        '#stock':'tpl-stock',
+        '#purchases':'tpl-purchases',
+        '#customers':'tpl-people',
+        '#suppliers':'tpl-people',
+        '#invoices':'tpl-invoices',
+        '#reports':'tpl-reports',
+        '#settings':'tpl-settings'
+      }[hash] || 'tpl-pos';
+
+      viewEl.innerHTML = '';
+      const tpl = document.getElementById(tplId);
+      viewEl.appendChild(tpl.content.cloneNode(true));
+      // mount controllers
+      if(hash==='#pos') mountPOS();
+      if(hash==='#products') mountProducts();
+      if(hash==='#stock') mountStock();
+      if(hash==='#purchases') mountPurchases();
+      if(hash==='#customers') mountPeople('customers');
+      if(hash==='#suppliers') mountPeople('suppliers');
+      if(hash==='#invoices') mountInvoices();
+      if(hash==='#reports') mountReports();
+      if(hash==='#settings') mountSettings();
+    }
+    window.addEventListener('hashchange', renderRoute);
+
+    // Global search / barcode
+    const globalSearch = document.getElementById('globalSearch');
+    globalSearch.addEventListener('keydown', e=>{
+      if(e.key==='Enter'){
+        const q = e.target.value.trim();
+        if(!q) return;
+        // try barcode exact, else by name contains
+        const p = db.products.find(x=>x.barcode===q) || db.products.find(x=>x.name.includes(q));
+        if(p){ location.hash = '#pos'; setTimeout(()=> addToCart(p.id), 50); }
+        e.target.value='';
+      }
+    });
+
+    // Backup/Import/Reset
+    document.getElementById('btnExport').onclick = ()=>{
+      const blob = new Blob([JSON.stringify(db,null,2)], {type:'application/json'});
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `cashier-backup-${Date.now()}.json`;
+      a.click();
+    };
+    const fileInput = document.getElementById('backupFile');
+    document.getElementById('btnImport').onclick = ()=> fileInput.click();
+    fileInput.onchange = (e)=>{
+      const f = e.target.files[0]; if(!f) return;
+      const r = new FileReader();
+      r.onload = ()=>{
+        try{
+          const data = JSON.parse(r.result);
+          db = Object.assign(JSON.parse(JSON.stringify(emptyDB)), data);
+          saveDB(); renderRoute();
+          alert('تم الاستيراد بنجاح');
+        }catch(err){ alert('ملف غير صالح'); }
+      };
+      r.readAsText(f);
+      e.target.value = '';
+    };
+    document.getElementById('btnReset').onclick = ()=>{
+      if(confirm('سيتم حذف جميع البيانات المحلية. هل أنت متأكد؟')){
+        db = JSON.parse(JSON.stringify(emptyDB));
+        saveDB(); renderRoute();
+      }
+    };
+
+    // Helpers
+    function currency(x){
+      const c = db.settings.currency || '';
+      return `${fmt(x)} ${c}`;
+    }
+    function categoryName(id){ return db.categories.find(c=>c.id===id)?.name || ''; }
+    function productStock(pid){ return db.products.find(p=>p.id===pid)?.stock || 0; }
+    function ensureDefaultData(){
+      if(db.categories.length===1){
+        db.categories.push({id:uid(),name:'مشروبات'},{id:uid(),name:'أغذية'},{id:uid(),name:'منظفات'});
+      }
+      saveDB();
+    }
+
+    // POS state
+    let CART = [];
+    function addToCart(pid){
+      const p = db.products.find(x=>x.id===pid); if(!p) return;
+      const row = CART.find(x=>x.productId===pid);
+      if(row){ row.qty += 1; }
+      else { CART.push({productId:pid, name:p.name, price:p.price, qty:1}); }
+      renderCart();
+    }
+    function removeFromCart(pid){
+      CART = CART.filter(x=>x.productId!==pid);
+      renderCart();
+    }
+
+    // Mount POS
+    function mountPOS(){
+      ensureDefaultData();
+      CART = [];
+      const sel = document.getElementById('posCustomer');
+      sel.innerHTML = db.customers.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+      document.getElementById('posPayMethod').value = 'cash';
+      // Category filter
+      const catSel = document.getElementById('posCategory');
+      catSel.innerHTML = db.categories.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+      catSel.value = db.categories[0]?.id || '';
+      // Catalog
+      const catalog = document.getElementById('posCatalog');
+      const search = document.getElementById('posSearch');
+      function drawCatalog(){
+        const q = search.value.trim();
+        const cat = catSel.value;
+        const list = db.products.filter(p=>{
+          const okCat = !cat || cat==='c-all' || p.categoryId===cat;
+          const okQ = !q || p.name.includes(q) || (p.barcode||'').includes(q);
+          return okCat && okQ && p.active!==false;
+        });
+        catalog.innerHTML = list.map(p=>`
+          <div class="pitem" data-id="${p.id}">
+            <div class="name">${p.name}</div>
+            <div class="muted">المتوفر: ${p.stock ?? 0}</div>
+            <div class="price">${currency(p.price)}</div>
+            <button class="btn" data-add="${p.id}">إضافة</button>
+          </div>
+        `).join('') || `<div class="empty">لا توجد منتجات</div>`;
+      }
+      search.oninput = drawCatalog;
+      catSel.onchange = drawCatalog;
+      drawCatalog();
+
+      catalog.addEventListener('click', (e)=>{
+        const id = e.target?.dataset?.add;
+        if(id) addToCart(id);
+      });
+
+      // Cart + totals
+      document.getElementById('btnClearCart').onclick = ()=>{ CART=[]; renderCart(); };
+
+      const disc = document.getElementById('tDiscount');
+      const tax = document.getElementById('tTax');
+      disc.value = db.settings.disc || 0;
+      tax.value = db.settings.tax || 0;
+      disc.oninput = renderCart;
+      tax.oninput = renderCart;
+
+      document.getElementById('btnCheckout').onclick = checkout;
+      document.getElementById('btnPrint').onclick = printReceipt;
+
+      renderCart();
+    }
+
+    function renderCart(){
+      const box = document.getElementById('cartItems');
+      if(!box) return;
+      if(CART.length===0){ box.innerHTML = `<div class="empty">السلة فارغة</div>`; updateTotals(); return; }
+      box.innerHTML = CART.map(it=>{
+        const p = db.products.find(x=>x.id===it.productId) || {};
+        return `<div class="cart-row">
+          <div>${p.name||''}</div>
+          <input type="number" min="1" value="${it.qty}" data-qty="${it.productId}"/>
+          <input type="number" min="0" value="${it.price}" data-price="${it.productId}"/>
+          <div>${currency((it.qty*it.price))}</div>
+          <button class="btn danger" data-del="${it.productId}">×</button>
+        </div>`;
+      }).join('');
+      box.querySelectorAll('input[data-qty]').forEach(inp=>{
+        inp.oninput = ()=>{ const it=CART.find(x=>x.productId===inp.dataset.qty); it.qty = Math.max(1, Number(inp.value||1)); updateTotals(); };
+      });
+      box.querySelectorAll('input[data-price]').forEach(inp=>{
+        inp.oninput = ()=>{ const it=CART.find(x=>x.productId===inp.dataset.price); it.price = Math.max(0, Number(inp.value||0)); updateTotals(); };
+      });
+      box.querySelectorAll('button[data-del]').forEach(btn=>{
+        btn.onclick = ()=> removeFromCart(btn.dataset.del);
+      });
+      updateTotals();
+    }
+    function updateTotals(){
+      const subtotal = CART.reduce((s,it)=> s + (Number(it.qty)*Number(it.price)), 0);
+      const disc = Number(document.getElementById('tDiscount')?.value||0);
+      const tax = Number(document.getElementById('tTax')?.value||0);
+      const discountVal = subtotal * (disc/100);
+      const taxedBase = subtotal - discountVal;
+      const taxVal = taxedBase * (tax/100);
+      const total = taxedBase + taxVal;
+
+      const sEl = document.getElementById('tSubtotal');
+      const tEl = document.getElementById('tTotal');
+      if(sEl) sEl.textContent = currency(subtotal);
+      if(tEl) tEl.textContent = currency(total);
+
+      // stock alert
+      const alertEl = document.getElementById('stockAlert');
+      const low = CART.some(it=>{
+        const p = db.products.find(x=>x.id===it.productId);
+        return p && p.stock !== undefined && (p.stock - it.qty) < (p.reorderLevel||0);
+      });
+      if(alertEl){
+        alertEl.classList.toggle('hidden', !low);
+      }
+      return {subtotal, discountVal, taxVal, total};
+    }
+
+    function checkout(){
+      if(CART.length===0){ alert('السلة فارغة'); return; }
+      // Validate stock
+      for(const it of CART){
+        const p = db.products.find(x=>x.id===it.productId);
+        if(!p){ alert('منتج غير موجود'); return; }
+        if((p.stock||0) < it.qty){ if(!confirm(`الكمية غير كافية لمنتج: ${p.name}. متابعة؟`)) return; }
+      }
+      const {subtotal, discountVal, taxVal, total} = updateTotals();
+      const sale = {
+        id: uid(),
+        date: nowIso(),
+        customerId: document.getElementById('posCustomer').value || 'walkin',
+        payMethod: document.getElementById('posPayMethod').value || 'cash',
+        items: CART.map(x=>({productId:x.productId, qty:x.qty, price:x.price})),
+        subtotal, discount:discountVal, tax:taxVal, total
+      };
+      db.sales.push(sale);
+      // Decrease stock + stockMoves
+      for(const it of sale.items){
+        const p = db.products.find(x=>x.id===it.productId);
+        p.stock = (p.stock||0) - Number(it.qty);
+        db.stockMoves.push({id:uid(), productId:p.id, type:'sale', qty:-Number(it.qty), note:`بيع ${sale.id}`, date:sale.date});
+      }
+      // Customer credit
+      if(sale.payMethod==='credit'){
+        const c = db.customers.find(x=>x.id===sale.customerId);
+        if(c) c.balance = Number(c.balance||0) + total;
+      }
+      // Invoice
+      db.invoices.push({id:uid(), type:'sale', refId:sale.id, date:sale.date, party:sale.customerId, total:total, number:`S-${db.invoices.length+1}`});
+      saveDB();
+      // Prepare receipt
+      lastReceipt = sale;
+      printReceipt(true);
+      CART = [];
+      renderCart();
+      alert('تم تسجيل البيع');
+    }
+
+    // Receipt
+    let lastReceipt = null;
+    function printReceipt(auto=false){
+      const sale = lastReceipt || {
+        items: CART,
+        subtotal: CART.reduce((s,i)=>s+i.qty*i.price,0),
+        discount: updateTotals().discountVal,
+        tax: updateTotals().taxVal,
+        total: updateTotals().total,
+        date: nowIso()
+      };
+      // Fill template
+      const t = document.getElementById('tpl-receipt');
+      const dlg = t.content.cloneNode(true);
+      const store = db.settings.storeName || 'متجري';
+      dlg.querySelector('#rcStore').textContent = store;
+      dlg.querySelector('#rcDate').textContent = new Date(sale.date).toLocaleString('ar');
+      const lines = dlg.querySelector('#rcLines');
+      lines.innerHTML = sale.items.map(it=>{
+        const p = db.products.find(x=>x.id===it.productId) || {name: it.name || ''};
+        return `<div class="flex" style="justify-content:space-between">
+          <div>${p.name} × ${it.qty}</div>
+          <div>${fmt(it.qty*it.price)}</div>
+        </div>`;
+      }).join('');
+      dlg.querySelector('#rcSubtotal').textContent = fmt(sale.subtotal);
+      dlg.querySelector('#rcDiscount').textContent = fmt(sale.discount||0);
+      dlg.querySelector('#rcTax').textContent = fmt(sale.tax||0);
+      dlg.querySelector('#rcTotal').textContent = fmt(sale.total);
+      // Window print
+      const wrap = document.createElement('div');
+      wrap.appendChild(dlg);
+      const w = window.open('', '_blank', 'width=360,height=600');
+      const html = `
+        <html lang="ar" dir="rtl"><head><meta charset="utf-8">
+        <title>إيصال</title>
+        <style>body{font-family:Arial, sans-serif} .receipt{width:280px;margin:0 auto}</style>
+
+  </script>
+</body>
+</html>
