@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Cashier POS - كاشير</title>
+  <style>
+    :root{
+      --bg:#0f172a;
+      --card:#111827;
+      --muted:#6b7280;
+      --text:#e5e7eb;
+      --primary:#22c55e;
+      --danger:#ef4444;
+      --warn:#f59e0b;
+      --border:#1f2937;
+      --accent:#38bdf8;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;background:linear-gradient(180deg,#0b1223,#0f172a);
+      color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,"Noto Sans Arabic",Tahoma,Arial,sans-serif;
+    }
+    a{color:inherit;text-decoration:none}
+    button{cursor:pointer}
+    .app{
+      height:100dvh;display:grid;grid-template-rows:56px 1fr;
+    }
+    header{
+      display:flex;align-items:center;justify-content:space-between;
+      padding:0 12px;border-bottom:1px solid var(--border);background:#0b1220;
+      gap:8px
+    }
+    .brand{display:flex;align-items:center;gap:10px}
+    .logo{
+      width:34px;height:34px;border-radius:8px;display:grid;place-items:center;
+      background:linear-gradient(145deg,#18233c,#0f1a33);border:1px solid #22304f;
+      box-shadow:0 2px 8px rgba(0,0,0,.35), inset 0 0 8px rgba(56,189,248,.08);
+    }
+    .logo svg{width:22px;height:22px;fill:#93c5fd}
+    .brand h1{font-size:16px;margin:0}
+    .top-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .btn{
+      background:#152035;color:var(--text);border:1px solid #223047;
+      padding:8px 12px;border-radius:10px;font-weight:600;transition:.15s;display:inline-flex;gap:8px;align-items:center
+    }
+    .btn:hover{filter:brightness(1.05)}
+    .btn.primary{background:linear-gradient(180deg,#16a34a,#22c55e);border:none;color:#07210f}
+    .btn.warn{background:#3b2b0a;border:1px solid #5b430e;color:#fbbf24}
+    .btn.danger{background:#3b0a0a;border:1px solid #6b1111;color:#fecaca}
+    .search{
+      flex:1;min-width:160px;display:flex;align-items:center;background:#121a2d;border:1px solid #223047;border-radius:10px;padding:6px 10px
+    }
+    .search input{
+      width:100%;background:transparent;border:none;outline:none;color:var(--text);font-size:14px
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div class="brand">
+        <div class="logo" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M4 6h16a2 2 0 0 1 2 2v3H2V8a2 2 0 0 1 2-2zm-2 7h20v3a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-3zm6 2a1 1 0 1 0 0 2h8a1 1 0 1 0 0-2H8z"/></svg>
+        </div>
+        <h1>كاشير - Cashier POS</h1>
+      </div>
+      <div class="search">
+        <input id="globalSearch" placeholder="ابحث عن منتج أو امسح الباركود (Enter)..." />
+      </div>
+      <div class="top-actions">
+        <button class="btn" id="btnExport">تصدير نسخ احتياطي</button>
+        <input id="backupFile" type="file" accept=".json" class="hidden" />
+        <button class="btn" id="btnImport">استيراد</button>
+        <button class="btn warn" id="btnReset">تهيئة البيانات</button>
+      </div>
+    </header>
+    <div class="layout">
+      <nav>
+        <ul class="nav-list">
+          <li><a href="#pos" class="nav-link active">نقطة البيع POS</a></li>
+          <li><a href="#products" class="nav-link">المنتجات</a></li>
+          <li><a href="#stock" class="nav-link">المخزون</a></li>
+          <li><a href="#purchases" class="nav-link">المشتريات</a></li>
+          <li><a href="#customers" class="nav-link">العملاء</a></li>
+          <li><a href="#suppliers" class="nav-link">الموردون</a></li>
+          <li><a href="#invoices" class="nav-link">الفواتير</a></li>
+          <li><a href="#reports" class="nav-link">التقارير</a></li>
+          <li><a href="#settings" class="nav-link">الإعدادات</a></li>
+        </ul>
+      </nav>
+      <main class="content" id="view">
+        <!-- Views injected by JS -->
+      </main>
+    </div>
+  </div>
+
+  <template id="tpl-pos">
+    <div class="pos">
+      <div class="toolbar">
+        <div class="field" style="flex:2">
+          <label>اختر عميل</label>
+          <select id="posCustomer"></select>
+        </div>
+        <div class="field" style="flex:1">
+          <label>طريقة الدفع</label>
+          <select id="posPayMethod">
+            <option value="cash">نقد</option>
+            <option value="card">بطاقة</option>
+            <option value="credit">آجل</option>
+          </select>
+        </div>
+        <div class="spacer"></div>
+        <button class="btn primary" id="btnCheckout">إتمام البيع</button>
+      </div>
+      <div class="pos-cols">
+        <div class="catalog">
+          <div class="toolbar">
+            <input id="posSearch" placeholder="بحث عن منتج أو امسح الباركود" />
+            <select id="posCategory" style="max-width:220px"></select>
+            <div class="spacer"></div>
+            <span class="muted">اضغط على المنتج لإضافته للسلة</span>
+          </div>
+          <div class="product-grid" id="posCatalog"></div>
+        </div>
+        <div class="cart">
+          <div class="flex">
+            <strong>السلة</strong>
+            <div class="spacer"></div>
+            <button class="btn danger" id="btnClearCart">تفريغ</button>
+          </div>
+          <div class="cart-items" id="cartItems"></div>
+          <div class="totals">
+            <div class="row"><span>الإجمالي</span><strong id="tSubtotal">0.00</strong></div>
+            <div class="row"><span>خصم (%)</span><input id="tDiscount" type="number" min="0" max="100" value="0"/></div>
+            <div class="row"><span>ضريبة (%)</span><input id="tTax" type="number" min="0" max="100" value="0"/></div>
+            <div class="row"><span>الصافي</span><strong id="tTotal">0.00</strong></div>
+          </div>
+          <div class="flex">
+            <button class="btn" id="btnPrint">طباعة إيصال</button>
+            <div class="spacer"></div>
+            <span id="stockAlert" class="badge warn hidden">تنبيه مخزون منخفض</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <template id="tpl-products">
+    <div class="cards">
+      <div class="card h6">
+        <h2>المنتجات</h2>
+        <div class="toolbar">
+          <input id="pSearch" placeholder="بحث..." />
+          <select id="pCatFilter"></select>
+          <div class="spacer"></div>
+          <button class="btn" id="btnSampleData">ملء بيانات تجريبية</button>
+          <button class="btn primary" id="btnNewProduct">منتج جديد</button>
+        </div>
+        <div style="overflow:auto">
+          <table>
+            <thead>
+              <tr>
+                <th>الباركود</th><th>اسم المنتج</th><th>تصنيف</th><th>سعر البيع</th><th>المخزون</th><th>حد إعادة الطلب</th><th></th>
+              </tr>
+            </thead>
+            <tbody id="pTable"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card h6">
+        <h2>التصنيفات</h2>
+        <div class="toolbar">
+          <input id="catName" placeholder="اسم التصنيف" />
+          <button class="btn" id="btnAddCat">إضافة</button>
+        </div>
+        <div id="catList"></div>
+      </div>
+    </div>
+  </template>
+
+  <template id="tpl-stock">
+    <div class="cards">
+      <div class="card h6">
+        <h2>حركات المخزون</h2>
+        <div class="toolbar">
+          <select id="mType">
+            <option value="">الكل</option>
+            <option value="in">دخول</option>
+            <option value="out">خروج</option>
+            <option value="adjust">تسوية</option>
+            <option value="purchase">شراء</option>
+            <option value="sale">بيع</option>
+            <option value="return">مرتجع</option>
+          </select>
+          <div class="spacer"></div>
+          <button class="btn" id="btnAdjust">تسوية مخزون</button>
+        </div>
+        <div style="overflow:auto">
+          <table>
+            <thead><tr><th>التاريخ</th><th>المنتج</th><th>نوع</th><th>كمية</th><th>ملاحظة</th></tr></thead>
+            <tbody id="mTable"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card h6">
+        <h2>تنبيهات المخزون</h2>
+        <div id="lowStock"></div>
+      </div>
+    </div>
+  </template>
+
+  <template id="tpl-purchases">
+    <div class="cards">
+      <div class="card h6">
+        <h2>إنشاء فاتورة شراء</h2>
+        <div class="grid two">
+          <div class="field">
+            <label>المورد</label>
+            <select id="purSupplier"></select>
+          </div>
+          <div class="field">
+            <label>ملاحظة</label>
+            <input id="purNote" placeholder="اختياري">
+          </div>
+        </div>
+        <div class="toolbar">
+          <input id="purSearch" placeholder="بحث عن منتج لإضافته" />
+          <div class="spacer"></div>
+          <button class="btn primary" id="btnCommitPurchase">إدخال المخزون</button>
+        </div>
+        <div class="cart-items" id="purItems"></div>
+      </div>
+      <div class="card h6">
+        <h2>سجل المشتريات</h2>
+        <div style="overflow:auto">
+          <table>
+            <thead><tr><th>#</th><th>التاريخ</th><th>المورد</th><th>الإجمالي</th></tr></thead>
+            <tbody id="purTable"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <template id="tpl-people">
+    <div class="cards">
+      <div class="card h6">
+        <h2 id="peTitle">العملاء</h2>
+        <div class="toolbar">
+          <input id="peName" placeholder="الاسم" />
+          <input id="pePhone" placeholder=" الهاتف" />
+          <button class="btn" id="btnAddPe">إضافة</button>
+        </div>
+        <div style="overflow:auto">
+          <table>
+            <thead><tr><th>الاسم</th><th>الهاتف</th><th>الرصيد</th><th></th></tr></thead>
+            <tbody id="peTable"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card h6">
+        <h2>ملاحظات</h2>
+        <p class="muted">الرصيد يتحرك مع مبيعات الآجل والمدفوعات. هذا النموذج الأولي يحدّث الأرصدة أساسيًا فقط.</p>
+      </div>
+    </div>
+  </template>
+
+  <template id="tpl-invoices">
+    <div class="cards">
+      <div class="card h6">
+        <h2>الفواتير</h2>
+        <div style="overflow:auto">
+          <table>
+            <thead><tr><th>#</th><th>النوع</th><th>التاريخ</th><th>العميل/المورد</th><th>الإجمالي</th><th></th></tr></thead>
+            <tbody id="invTable"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card h6">
+        <h2>معاينة/طباعة</h2>
+        <div id="invPreview" class="empty">اختر فاتورة لعرضها</div>
+      </div>
+    </div>
+  </template>
+
+  <template id="tpl-reports">
+    <div class="cards">
+      <div class="card h6">
+        <h2>ملخص اليوم</h2>
+        <div class="grid three">
+          <div class="pitem">
+            <div>مبيعات اليوم</div>
+            <div id="rSales" class="ok-text" style="font-size:22px;font-weight:800">0.00</div>
+          </div>
+          <div class="pitem">
+            <div>الربح التقريبي</div>
+            <div id="rProfit" class="ok-text" style="font-size:22px;font-weight:800">0.00</div>
+          </div>
+          <div class="pitem">
+            <div>عدد الفواتير</div>
+            <div id="rCount" class="ok-text" style="font-size:22px;font-weight:800">0</div>
+          </div>
+        </div>
+      </div>
+      <div class="card h6">
+        <h2>أفضل المنتجات</h2>
+        <div style="overflow:auto">
+          <table>
+            <thead><tr><th>المنتج</th><th>الكمية</th><th>الإيراد</th></tr></thead>
+            <tbody id="rTop"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <template id="tpl-settings">
+    <div class="cards">
+      <div class="card h6">
+        <h2>الإعدادات العامة</h2>
+        <div class="grid two">
+          <div class="field"><label>اسم المتجر</label><input id="setStoreName" placeholder="مثال: متجر الربيع"></div>
+          <div class="field"><label>الضريبة الافتراضية (%)</label><input id="setTax" type="number" min="0" max="100" value="0"></div>
+          <div class="field"><label>خصم افتراضي (%)</label><input id="setDisc" type="number" min="0" max="100" value="0"></div>
+          <div class="field"><label>عملة العرض</label><input id="setCurrency" placeholder="SAR, MAD, USD..."></div>
+        </div>
+        <div class="toolbar">
+          <button class="btn primary" id="btnSaveSettings">حفظ</button>
+        </div>
+      </div>
+      <div class="card h6">
+        <h2>حول</h2>
+        <p class="muted">هذا نموذج أولي يعمل على المتصفح فقط. يمكنك وصله بواجهة خلفية لاحقًا. يحفظ البيانات في LocalStorage.</p>
+      </div>
+    </div>
+  </template>
+
+  <template id="tpl-receipt">
+    <div class="receipt" id="receipt">
+      <div style="text-align:center">
+        <div style="font-weight:800" id="rcStore">متجري</div>
+        <div class="muted" id="rcDate">—</div>
+        <hr />
+      </div>
+      <div id="rcLines"></div>
+      <hr />
+      <div class="flex" style="justify-content:space-between"><div>الإجمالي</div><div id="rcSubtotal">0.00</div></div>
+      <div class="flex" style="justify-content:space-between"><div>خصم</div><div id="rcDiscount">0.00</div></div>
+      <div class="flex" style="justify-content:space-between"><div>ضريبة</div><div id="rcTax">0.00</div></div>
+      <div class="flex" style="justify-content:space-between;font-weight:800"><div>الصافي</div><div id="rcTotal">0.00</div></div>
+      <hr />
+      <div style="text-align:center">شكرًا لتسوقكم!</div>
+    </div>
+  </template>
+
+  <script src="script.js"></script>
+</body>
+</html>
